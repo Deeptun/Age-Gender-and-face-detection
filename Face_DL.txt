@@ -1,0 +1,125 @@
+import numpy as np
+import cv2
+import imutils
+import string
+import os
+import glob
+import pandas as pd 
+import re
+import time
+import pytesseract
+from matplotlib import pyplot as plt
+from nltk.tokenize import word_tokenize
+
+
+face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+
+img1 = cv2.imread('7.jpg')
+img = cv2.resize(img1,(1100,700))
+
+gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+
+print(len(faces))
+
+rectKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 5))
+sqKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (31, 31))
+
+lst1 = []
+lst2 = []
+
+i = 0
+
+for (x,y,w,h) in faces:
+    # img = cv2.rectangle(img,(x,y),(x+w,y+h),(255,0,0),2)
+    # roi_gray = gray[y-6*h//7:y+5*h//6, x+7*w//6:x+47*w//10]
+    roi_gray = gray[y-9*h//8:y+45*h//60, x+7*w//6:x+47*w//10]
+    cv2.imwrite("DL_new_"+str(i)+".jpg",img)
+    blr = cv2.GaussianBlur(roi_gray, (3, 3), 0)
+    roi_blackhat = cv2.morphologyEx(blr, cv2.MORPH_BLACKHAT, rectKernel)
+    roi_gray = cv2.fastNlMeansDenoising(blr)
+    roi_th = cv2.threshold(roi_blackhat, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    lines1 = pytesseract.image_to_string(roi_th, lang='eng', config="--oem 1 --psm 6").split("\n")
+    # lines2 = pytesseract.image_to_string(roi_th, lang='eng', config="--oem 3 --psm 7").split("\n")
+    # lst1.append(lines1)
+    # lst2.append(lines2)
+    # lst1=list(set(lst1))
+    # print(lines1)
+    # print(lst1)
+    # print(lines1[len(lines1)-1])
+    lines1 = list(filter(None, lines1))
+    print(lines1)
+    DL_num = word_tokenize(lines1[len(lines1)-1])
+    # DL_nm_sort = sorted(DL_num, key=len)
+    # print("Driving license number: " + DL_nm_sort[len(DL_nm_sort)-1])
+    # print(len(DL_num))
+    if len(DL_num) >= 3:
+    	DL_num1 = DL_num[len(DL_num)-3] + " " + DL_num[len(DL_num)-2] + " " + DL_num[len(DL_num)-1]
+    else:
+    	DL_num1 = DL_num[len(DL_num)-1]
+    DL_num2 = sorted(word_tokenize(DL_num1), key=len)
+    print("Driving license number: " + DL_num2[len(DL_num2)-1])
+    Ex_dt = word_tokenize(lines1[len(lines1)-2])
+    # print(Ex_dt)
+    # print(len(Ex_dt))
+    if len(Ex_dt) >= 5:
+    	Ex_date = Ex_dt[len(Ex_dt)-4] + " " + Ex_dt[len(Ex_dt)-5]
+    else:
+    	Ex_date = Ex_dt[len(Ex_dt)-1] + " " + Ex_dt[len(Ex_dt)-2]
+    Ex_date1 = sorted(word_tokenize(Ex_date), key=len)
+    print("Expiry date: " + Ex_date1[len(Ex_date1)-1])
+
+    Ex_dt2 = word_tokenize(lines1[len(lines1)-2])
+
+    if len(Ex_dt2) >= 5:
+    	DOB = word_tokenize(lines1[len(lines1)-3])
+    	# DOB = lines1[len(lines1)-3]
+    else:
+    	DOB = word_tokenize(lines1[len(lines1)-4])
+    	# DOB = lines1[len(lines1)-4]
+    
+    # print(DOB)
+
+    DOB1 = [s for s in DOB if len(s) >= 2]
+    DOB2 = DOB1[0]
+    
+    if len(DOB1) == 2:
+    	Country = DOB1[1]
+    elif len(DOB1) == 3:
+    	Country = DOB1[1]+" " + DOB1[2] 
+    elif len(DOB1) >= 4:
+    	Country = DOB1[1]+" " + DOB1[2] 
+    else:
+    	Country = ""
+
+    print(Country)
+
+    columns = ["DL Number","Expiry date","DOB","Country"]
+    
+    fulldata = {
+    "DL Number":DL_num2[len(DL_num2)-1],
+    "Expiry date":Ex_date1[len(Ex_date1)-1],
+    "DOB": DOB2,
+    "Country": Country
+    }
+    # print(fulldata)
+    fulldata = [fulldata]
+    dfdata = pd.DataFrame(fulldata)
+    print(dfdata)
+
+    # if file does not exist write header
+    if not os.path.isfile('new.csv'):
+    	dfdata.to_csv('new.csv', index = False, header = 'columns')
+    else: # else if file exists so append without writing the header
+    	dfdata.to_csv('new.csv', mode = 'a',  index = False, header = False)
+
+    cv2.rectangle(img,(x+7*w//6,y-6*h//7),(x+47*w//10+w,y+45*h//60),(0,255,0),2)
+    cv2.imwrite("img_"+str(i)+".jpg",img)
+    i = i +1
+
+cv2.imshow('img',img)
+# cv2.imshow('rg ',roi_gray)
+# cv2.imshow('rg_th ',roi_th)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
